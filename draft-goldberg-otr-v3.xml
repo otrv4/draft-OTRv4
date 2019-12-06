@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc3526 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3526.xml'>
+    <!ENTITY rfc4648 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4648.xml'>
+    <!ENTITY rfc4949 PUBLIC ''
+      'http://xml.resource.org/public/rfc/bibxml/reference.RFC.4949.xml'>
+]>
+
+<?rfc compact="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc sortrefs="yes"?>
+<?rfc strict="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc toc="yes"?>
+<?rfc tocdepth="4"?>
+
+<rfc category="info" docName="draft-goldberg-otr-v3-00" ipr="trust200902">
+
+  <?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+  <front>
+    <title abbrev="OTRv3">Off-the-Record Messaging Protocol, Version 3</title>
+    <author initials="I." surname="Goldberg" fullname="Ian Goldberg">
+      <organization>University of Waterloo</organization>
+      <address>
+        <postal>
+          <street>200 University Ave W</street>
+          <city>Waterloo</city>
+          <region>ONT</region>
+          <code>N2L 3G1</code>
+          <country>Canada</country>
+        </postal>
+        <email>iang@cs.uwaterloo.ca</email>
+      </address>
+    </author>
+    <author initials="P." surname="Saint-Andre" fullname="Peter Saint-Andre" role="editor">
+      <organization>Cisco</organization>
+      <address>
+        <postal>
+          <street>1899 Wyknoop Street, Suite 600</street>
+          <city>Denver</city>
+          <region>CO</region>
+          <code>80202</code>
+          <country>USA</country>
+        </postal>
+        <phone>+1-303-308-3282</phone>
+        <email>psaintan@cisco.com</email>
+      </address>
+    </author>
+    <author initials='P.' surname="Wouters" fullname='Paul Wouters' role="editor">
+      <organization>Red Hat</organization>
+      <address>
+       <email>pwouters@redhat.com</email>
+      </address>
+     </author>
+    <author initials='G.' surname="Bilkey" fullname='Geordie Bilkey' role="editor">
+      <organization>PowerInform</organization>
+      <address>
+       <email>geordie@powerinform.com</email>
+      </address>
+     </author>
+    <date month="September" year="2013"/>
+    <abstract>
+      <t>This document describes version 3 of the Off-the-Record Messaging protocol ("OTR").  The protocol is used for one-to-one end-to-end encryption of message content exchanged via any kind of instant messaging transport. It provides authenticity, privacy, perfect forward secrecry and repudiation. Additionally, it allows negotiating a symmetric encryption key that can be used for bulk data transfer, such as file transfers or audio/video transmissions. OTR assumes a network model that provides in-order delivery of messages, but also assumes that some messages might not be delivered at all (for example, if the intended recipient disconnects).  OTR is designed to protect the confidentiality of messages against passive and active attackers, but it not designed to protect against some other attacks (e.g., Denial of Service).</t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section title="Introduction" anchor='intro'>
+      <t>This document describes version 3 of the Off-the-Record Messaging protocol ("OTR").  The protocol is used for end-to-end encryption of message content exchanged via common instant messaging transports.  OTR assumes a network model that provides in-order delivery of messages, but also assumes that some messages might not be delivered at all (for example, if the intended recipient disconnects).  OTR is designed to protect the confidentiality of messages against passive and active attackers, but it not designed to protect against some other attacks (e.g., Denial of Service).</t>
+<t>DESIGN GOALS</t>
+
+      <t>In essence, the protocol proceeds as follows:</t>
+      <t>
+        <list style='numbers'>
+          <t>Alice signals to Bob that she would like to use OTR to communicate (using an "OTR Query Message") or that she is willing to use OTR to communicate (using a whitespace-tagged plaintext message).  Both mechanisms convey the version(s) of OTR that Alice supports.</t>
+          <t>Bob initiates an authenticated key exchange (AKE) with Alice.  (Version 3 of OTR uses a variant of the SIGMA protocol as its AKE.)</t>
+          <t>Alice and Bob exchange Data Messages in order to send information to each other.</t>
+        </list>
+      </t>
+      <t>Details are provided under <xref target='overview'/> and <xref target='protocol'/>.</t>
+    </section>
+
+    <section title="Terminology" anchor="terms">
+      <t>The character ^ denotes exponentiation.</t>
+      <t>Certain security-related terms are to be understood in the sense defined in <xref target="RFC4949"/>; such terms include, but are not limited to, "assurance", "attack", "authentication", "authorization", "certificate", "certification authority", "certification path", "confidentiality", "credential", "downgrade", "encryption", "hash value", "identity", "integrity", "signature", "self-signed certificate", "sign", "spoof", "tamper", "trust", "trust anchor", "validate", and "verify".</t>
+      <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in <xref target='RFC2119'/>.</t>
+    </section>
+
+    <section title="Overview" anchor="overview">
+
+      <t>This section provides a high-level overview of the OTR protocol.</t>
+      <t>The OTR protocol happens within the actual message content channel. This channel can be limited to only allow human reaadble characters. All OTR messages use base64 to encode the binary data into human readable characters. OTR messages also need to be uniquely identifiable as OTR messages so that OTR capable clients can identify and process these messages before displaying it to the user. The OTR protocol uses the prefix "?OTR" to denote that a message is an OTR protocol message. It uses base64 to encode all encrypted content.</t>
+
+      <section title="Requesting an OTR Conversation" anchor="overview-request">
+      <t>As the OTR protocol needs to work fully within the message content channel, discovery of the OTR capability has to be performed inide that channel. This process needs to be invisible to clients that do not support OTR. To achieve this, a special "morse code" message is appended to the user written message before the message is sent out over the network. This "morse code" message consists of spaces and tab characters. Both of these characters are displayed as whitespace and therefor do not disturb the conversation with someone using an instant message client that does not support OTR. An OTR-supporting client receiving this marker can initiate an OTR conversation automatically based on its local policy.</t>
+
+      <t>When an OTR-capable client requires all messages to be protected by OTR, it skips the discovery mechanism and sends an OTR Query Message. Like all OTR messages, it uses the "?OTR" prefix for the receiving OTR-capable client to process the message. This initial message also contains a human readable portion in plaintext or HTML that can be used to inform non-OTR capable clients about their lack of OTR support. OTR capable clients cannot prevent non-OTR clients from sending unencrypted messages.</t>
+      <t>Both the discovery and the initiation message contain an OTR version number to indicate which OTR versions the client supports. Currently only version "3" has been defined. Previous (non-standarized) versions SHOULD NOT be supported.</t>
+      </section>
+
+      <section title="Establishing an OTR Conversation" anchor="overview-ake">
+      <t>When both parties agree to initiate an OTR conversation, an Authenticated Key Exchange ("AKE") is performed. AKE first ensures privacy via a Diffie-Hellman key exchange. This is followed by an exchange of the participants "long term public key" that identifies the parties. Both parties need to authenticate each other's long term public key out-of-band. The "long term public key" is only used for authentication. It is never used for encryption.
+      </t>
+      </section>
+
+      <section title="Handling multiple sign-ons" anchor="overview-signon">
+      <t>
+        Most IM networks allow users to be signed in multiple times. That allows users to run their IM software on multiple devices
+        at once. Messages send to a user arrive on all instances of that user, but only one instance can decrypt the OTR session.</t>
+      <t>Clients include instance tags in all OTR messages to differentiate the client instances for each user.</t>
+      </section>
+
+      <section title="Fragmentation of data " anchor="overview-fragmentation">
+      <t>
+       A user trying to send a message that before encryption is near or at the maximum message size of the message network will result in an encrypted mesage that exceeds the network's maximum message size.
+OTR allows an encrypted message to be fragmented into parts that are send as individual messages over the
+message network. Because OTR is transport-agnostic, the maximum message size is not specified in this protocol. 
+      </t>
+      </section>
+
+      <section title="The Socialist Millionaires' Protocol (SMP) " anchor="overview-smp">
+        <t>Once the AKE has completed successfully, each client has the other's public key and an encrypted channel has been formed. At this
+ point, both parties can mutually authenticate each other to ensure no man in the middle attack is taking place. Some information must have 
+been shared out of band (such as in persion) to securely authenticate successfully. The Socialist Millionaires' Protocol as used by OTR prov
+ides an alternative to manually checking the public key fingerprint which is often inconvenient or impossible to have communicated in the pa
+st e.g. the public keys of both parties did not exist when the two parties last communicated. SMP allows an arbitrary string to act as a sha
+red secret while preserving perfect forward secrecy. This shared secret can be much more human friendly and easier to communicate than a key
+ fingerprint.</t>
+        <t>Clients also include the option for a user to send a textual question along with the authentication query which is displayed when
+ prompting the other party for input. This provides several benefits in shared secret selection as any private information known to both par
+ties can be the subject of an authentication question. This allows, for example, two parties with prior interactions to start using OTR to c
+ommunicate without exchanging formal key information in person; instead authenticating by asking a sufficiently specific question about shar
+ed history.</t>
+      </section>
+
+      <section title="Exchanging Encrypted Messages" anchor="overview-exchange">
+      <t>To follow.</t>
+      </section>
+
+      <section title="Exchanging Encrypted Bulk Data" anchor="overview-bulk">
+      <t>The OTR protocol itself is not well suited for bulk encryption of data. [how true is this?] Many message networks only allow messages to be transported at human speeds and activate rate limiting when an instant message client bursts out too many messages in a short time frame. Some message networks have special facilities for bulk data transfer that should be used instead, often identified as a "Send File" option. Some message networks also support audio and video streams separate from the message channel.</t>
+      <t>The OTR protocol allows negotiation of a symmetric key that can be used to encrypt and decrypt bulk data. Transport of the encrypted bulk data can happen within the conversation stream, via the message network's alternative transport mechanisms for bulk data, or completely outside the message network such as email.</t>
+      </section>
+    </section>
+
+    <section title="Protocol Description" anchor="protocol">
+
+     <section title="Message Encoding" anchor="message_encoding">
+      <t>User data (eg the conversation) can be extended with any number of TLV's. This data is than encrypted, and encoded with BASE64
+      </t>
+      <section title="UTF-8 and html" anchor="utf8">
+       <t>
+       </t>
+      </section> 
+      <section title="BASE64" anchor="base64">
+       <t>
+       </t>
+      </section> 
+      <section title="Combining encodings?" anchor="conbing">
+       <t>
+       </t>
+      </section> 
+     </section> 
+
+      <section title="Authenticated Key Exchange" anchor="protocol-ake">
+        <t>This section outlines the version of the SIGMA protocol used as the AKE.  All exponentiations are done using the 1536-bit modules (hex,big-endian) from <xref target='RFC3526'/> with g=2 as a generator of that group.
+
+Alice and Bob's long-term authentication public keys are pubA and pubB, respectively.</t>
+        <t>Alice and Bob do an unauthenticated Diffie-Hellman (D-H) key exchange to set up an encrypted channel, and then do mutual authentication inside that channel.</t>
+        <t>When Bob initiates the AKE with Alice, the process is as follows.</t>
+        <t>
+          <list style='numbers'>
+            <t>Bob does the following:<vspace blankLines='1'/>
+              <list style='numbers'>
+                <t>Picks a random value r (128 bits)</t>
+                <t>Picks a random value x (at least 320 bits)</t>
+                <t>Sends Alice AESr(g^x), HASH(g^x)</t>
+              </list><vspace blankLines='1'/>
+            </t>
+            <t>Alice does the following:<vspace blankLines='1'/>
+              <list style='numbers'>
+                <t>Picks a random value y (at least 320 bits)</t>
+                <t>Sends Bob g^y</t>
+              </list><vspace blankLines='1'/>
+            </t>
+            <t>Bob does the following:<vspace blankLines='1'/>
+              <list style='numbers'>
+                <t>Verifies that Alice's g^y is a legal value (2 &gt;= g^y &gt;= modulus-2)</t>
+                <t>Computes s = (g^y)^x</t>
+                <t>Computes two AES keys c, c' and four MAC keys m1, m1', m2, m2' by hashing s in various ways</t>
+                <t>Picks keyidB, a serial number for his D-H key g^x</t>
+                <t>Computes MB = MACm1(g^x, g^y, pubB, keyidB)</t>
+                <t>Computes XB = pubB, keyidB, sigB(MB)</t>
+                <t>Sends Alice r, AESc(XB), MACm2(AESc(XB))</t>
+              </list><vspace blankLines='1'/>
+            </t>
+            <t>Alice does the following:<vspace blankLines='1'/>
+              <list style='numbers'>
+                <t>Uses r to decrypt the value of gx sent earlier</t>
+                <t>Verifies that HASH(g^x) matches the value sent earlier</t>
+                <t>Verifies that Bob's g^x is a legal value (2 &gt;= g^x &gt;= modulus-2)</t>
+                <t>Computes s = (g^x)^y (note that this will be the same as the value of s Bob calculated)</t>
+                <t>Computes two AES keys c, c' and four MAC keys m1, m1', m2, m2' by hashing s in various ways (the same as Bob)</t>
+                <t>Uses m2 to verify MACm2(AESc(XB))</t>
+                <t>Uses c to decrypt AESc(XB) to obtain XB = pubB, keyidB, sigB(MB)</t>
+                <t>Computes MB = MACm1(g^x, g^y, pubB, keyidB)</t>
+                <t>Uses pubB to verify sigB(MB)</t>
+                <t>Picks keyidA, a serial number for her D-H key gy</t>
+                <t>Computes MA = MACm1'(gy, gx, pubA, keyidA)</t>
+                <t>Computes XA = pubA, keyidA, sigA(MA)</t>
+                <t>Sends Bob AESc'(XA), MACm2'(AESc'(XA))</t>
+              </list><vspace blankLines='1'/>
+            </t>
+            <t>Bob does the following:<vspace blankLines='1'/>
+              <list style='numbers'>
+                <t>Uses m2' to verify MACm2'(AESc'(XA))</t>
+                <t>Uses c' to decrypt AESc'(XA) to obtain XA = pubA, keyidA, sigA(MA)</t>
+                <t>Computes MA = MACm1'(g^y, g^x, pubA, keyidA)</t>
+                <t>Uses pubA to verify sigA(MA)</t>
+              </list>
+            </t>
+          </list>
+        </t>
+        <t>If all of the verifications succeeded, Alice and Bob now know each other's Diffie-Hellman public keys, and share the value s. Alice is assured that s is known by someone with access to the private key corresponding to pubB, and similarly for Bob.</t>
+      </section>
+     <section title="Message Flow" anchor="message_flow">
+      <t> An OTR conversations
+        <figure><artwork><![CDATA[
+ 
+                 ALICE                             BOB
+
+                               [ plaintext ]
+                  Query Message  ----->
+                                 <-----  DH-Commit Message
+                  DH-Key Message ----->
+                                 <-----  Reveal Signature Message
+               Signature Message ----->
+                         [ Unverified / Private ]
+
+ Data Message (TLV Type not 1)   ----->
+                                 <----- Data Message (TLV Type not 1)
+                                 [...]
+
+              Data Message (TLV1) ----> 
+                               [ plaintext ]
+]]>
+</artwork></figure>
+      </t>
+     </section> 
+
+     <section title="Message Types" anchor="types">
+      <t>
+      </t>
+      <section title="Query and Init Message" anchor="query_message">
+       <t>
+       </t>
+      </section> 
+      <section title="Error Message" anchor="error_message">
+       <t>
+       </t>
+      </section> 
+      <section title="DH commit Message" anchor="dhcommit_message">
+       <t>
+       </t>
+      </section> 
+      <section title="DH key Message" anchor="dhkey_message">
+       <t>
+       </t>
+      </section> 
+      <section title="Reavel Signature Message" anchor="revealsig_message">
+       <t>
+       </t>
+      </section> 
+      <section title="Signature Message" anchor="signature_message">
+       <t>   
+       </t>
+      </section> 
+      <section title="Data Message" anchor="data_message">
+       <t> A data message is formed by:
+<figure><artwork><![CDATA[
+           <User input> | 0x00 | <TLV> <TLV>  ...
+]]>
+</artwork>
+</figure>
+       </t>
+       <section title="TLV Record types" anchor="tlv_message">
+        <t> TLV types, use sections or dropdown?
+<figure><artwork><![CDATA[
+   TLV Type:
+
+      One octet specifying the TLV typer. The following
+      values are assigned:
+
+          Value    TLV Numer              Format
+          -----    -------------------   --------
+          0        Padding               <insert me>
+          1        Disconnected          <insert me>
+          2        SMP Message 1         MPI Format
+          3        SMP Message 2         MPI Format
+          4        SMP Message 3         MPI Format
+          5        SMP Message 4         MPI Format
+          6        SMP Abort Message     <insert me>
+          7        SMP Message 1Q        <insert me>
+          8        Extra Symmetric Key   <insert me>
+]]>
+</artwork>
+</figure>
+        </t>
+         <section title="MPI Format" anchor="tlv_mpi_format">
+          <t>
+<figure><artwork><![CDATA[
+                      1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ !                           MPI Count                           !
+ +---------------------------------------------------------------+
+ !                                                               !
+ ~                             MPI(s)                            ~
+ !                                                               !
+ +---------------------------------------------------------------+
+
+   MPI
+]]>
+</artwork>
+</figure>
+         
+          </t>
+         </section> 
+       </section> 
+      </section> 
+     </section> 
+
+      <section title="Instance tags" anchor="instance-signon">
+<t>
+. Instance tags are 32-bit values that are intended to be persistent. If same client is logged into the same account from multiple locations, the intention is that the client will have different instance tags at each location. As shown below, OTR messages (fragmented and unfragmented) include the source and destination instance tags. If a client receives a message that lists a destination instance tag different from its own, the client should discard the message.</t>
+      <t>The smallest valid instance tag is 0x00000100. It is appropriate to set the destination instance tag to '0' when an actual destination instance tag is not known at the time the message is prepared. If a client receives a message with the sender instance tag set to less than 0x00000100, it should discard the message. Similarly, if a client receives a message with the recipient instance tag set to greater than 0 but less than 0x00000100, it should discard the message.</t>
+      <t>This avoids an issue on IM networks that always relay all messages to all sessions of a client who is logged in multiple times. In this situation, OTR clients can attempt to establish an OTR session indefinitely if there are interleaving messages from each of the sessions.</t>
+      </section>
+
+     <section title="Fragmentation" anchor="fragmentation">
+      <t>
+      </t>
+     </section> 
+
+     <section title="Socialist Millionaires' Protocol" anchor="smp">
+      <t>
+      </t>
+     </section> 
+
+    </section>
+
+    <section title="Key format and storage" anchor="keyformat">
+      <t>To follow.</t>
+    </section>
+
+    <section title="Implementation Guidelines" anchor="implementations">
+      <t>To follow. See RFC 6982</t>
+    </section>
+
+    <section title="Security Considerations" anchor="security">
+      <t>To follow.</t>
+    </section>
+
+  </middle>
+
+  <back>
+
+    <references title="Normative References">
+     &rfc2119;
+     &rfc3526;
+     &rfc4648;
+    </references>
+
+    <references title="Informative References">
+     &rfc4949;
+    </references>
+
+  </back>
+
+</rfc>

@@ -1,0 +1,728 @@
+
+
+
+
+Network Working Group                                        I. Goldberg
+Internet-Draft                                    University of Waterloo
+Intended status: Informational                       P. Saint-Andre, Ed.
+Expires: March 5, 2014                                             Cisco
+                                                         P. Wouters, Ed.
+                                                                 Red Hat
+                                                          G. Bilkey, Ed.
+                                                             PowerInform
+                                                          September 2013
+
+
+              Off-the-Record Messaging Protocol, Version 3
+                        draft-goldberg-otr-v3-00
+
+Abstract
+
+   This document describes version 3 of the Off-the-Record Messaging
+   protocol ("OTR").  The protocol is used for one-to-one end-to-end
+   encryption of message content exchanged via any kind of instant
+   messaging transport.  It provides authenticity, privacy, perfect
+   forward secrecry and repudiation.  Additionally, it allows
+   negotiating a symmetric encryption key that can be used for bulk data
+   transfer, such as file transfers or audio/video transmissions.  OTR
+   assumes a network model that provides in-order delivery of messages,
+   but also assumes that some messages might not be delivered at all
+   (for example, if the intended recipient disconnects).  OTR is
+   designed to protect the confidentiality of messages against passive
+   and active attackers, but it not designed to protect against some
+   other attacks (e.g., Denial of Service).
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at http://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on March 5, 2014.
+
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 1]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+Copyright Notice
+
+   Copyright (c) 2013 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents
+   (http://trustee.ietf.org/license-info) in effect on the date of
+   publication of this document.  Please review these documents
+   carefully, as they describe your rights and restrictions with respect
+   to this document.  Code Components extracted from this document must
+   include Simplified BSD License text as described in Section 4.e of
+   the Trust Legal Provisions and are provided without warranty as
+   described in the Simplified BSD License.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
+   2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   3
+   3.  Overview  . . . . . . . . . . . . . . . . . . . . . . . . . .   4
+     3.1.  Requesting an OTR Conversation  . . . . . . . . . . . . .   4
+     3.2.  Establishing an OTR Conversation  . . . . . . . . . . . .   5
+     3.3.  Handling multiple sign-ons  . . . . . . . . . . . . . . .   5
+     3.4.  Fragmentation of data . . . . . . . . . . . . . . . . . .   5
+     3.5.  The Socialist Millionaires' Protocol (SMP)  . . . . . . .   5
+     3.6.  Exchanging Encrypted Messages . . . . . . . . . . . . . .   6
+     3.7.  Exchanging Encrypted Bulk Data  . . . . . . . . . . . . .   6
+   4.  Protocol Description  . . . . . . . . . . . . . . . . . . . .   6
+     4.1.  Message Encoding  . . . . . . . . . . . . . . . . . . . .   6
+       4.1.1.  UTF-8 and html  . . . . . . . . . . . . . . . . . . .   6
+       4.1.2.  BASE64  . . . . . . . . . . . . . . . . . . . . . . .   6
+       4.1.3.  Combining encodings?  . . . . . . . . . . . . . . . .   6
+     4.2.  Authenticated Key Exchange  . . . . . . . . . . . . . . .   6
+     4.3.  Message Flow  . . . . . . . . . . . . . . . . . . . . . .   9
+     4.4.  Message Types . . . . . . . . . . . . . . . . . . . . . .   9
+       4.4.1.  Query and Init Message  . . . . . . . . . . . . . . .   9
+       4.4.2.  Error Message . . . . . . . . . . . . . . . . . . . .   9
+       4.4.3.  DH commit Message . . . . . . . . . . . . . . . . . .   9
+       4.4.4.  DH key Message  . . . . . . . . . . . . . . . . . . .   9
+       4.4.5.  Reavel Signature Message  . . . . . . . . . . . . . .   9
+       4.4.6.  Signature Message . . . . . . . . . . . . . . . . . .  10
+       4.4.7.  Data Message  . . . . . . . . . . . . . . . . . . . .  10
+         4.4.7.1.  TLV Record types  . . . . . . . . . . . . . . . .  10
+     4.5.  Instance tags . . . . . . . . . . . . . . . . . . . . . .  11
+     4.6.  Fragmentation . . . . . . . . . . . . . . . . . . . . . .  11
+     4.7.  Socialist Millionaires' Protocol  . . . . . . . . . . . .  11
+   5.  Key format and storage  . . . . . . . . . . . . . . . . . . .  11
+   6.  Implementation Guidelines . . . . . . . . . . . . . . . . . .  11
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 2]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+   7.  Security Considerations . . . . . . . . . . . . . . . . . . .  11
+   8.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  11
+     8.1.  Normative References  . . . . . . . . . . . . . . . . . .  12
+     8.2.  Informative References  . . . . . . . . . . . . . . . . .  12
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  12
+
+1.  Introduction
+
+   This document describes version 3 of the Off-the-Record Messaging
+   protocol ("OTR").  The protocol is used for end-to-end encryption of
+   message content exchanged via common instant messaging transports.
+   OTR assumes a network model that provides in-order delivery of
+   messages, but also assumes that some messages might not be delivered
+   at all (for example, if the intended recipient disconnects).  OTR is
+   designed to protect the confidentiality of messages against passive
+   and active attackers, but it not designed to protect against some
+   other attacks (e.g., Denial of Service).
+
+   DESIGN GOALS
+
+   In essence, the protocol proceeds as follows:
+
+   1.  Alice signals to Bob that she would like to use OTR to
+       communicate (using an "OTR Query Message") or that she is willing
+       to use OTR to communicate (using a whitespace-tagged plaintext
+       message).  Both mechanisms convey the version(s) of OTR that
+       Alice supports.
+
+   2.  Bob initiates an authenticated key exchange (AKE) with Alice.
+       (Version 3 of OTR uses a variant of the SIGMA protocol as its
+       AKE.)
+
+   3.  Alice and Bob exchange Data Messages in order to send information
+       to each other.
+
+   Details are provided under Section 3 and Section 4.
+
+2.  Terminology
+
+   The character ^ denotes exponentiation.
+
+   Certain security-related terms are to be understood in the sense
+   defined in [RFC4949]; such terms include, but are not limited to,
+   "assurance", "attack", "authentication", "authorization",
+   "certificate", "certification authority", "certification path",
+   "confidentiality", "credential", "downgrade", "encryption", "hash
+   value", "identity", "integrity", "signature", "self-signed
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 3]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+   certificate", "sign", "spoof", "tamper", "trust", "trust anchor",
+   "validate", and "verify".
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   [RFC2119].
+
+3.  Overview
+
+   This section provides a high-level overview of the OTR protocol.
+
+   The OTR protocol happens within the actual message content channel.
+   This channel can be limited to only allow human reaadble characters.
+   All OTR messages use base64 to encode the binary data into human
+   readable characters.  OTR messages also need to be uniquely
+   identifiable as OTR messages so that OTR capable clients can identify
+   and process these messages before displaying it to the user.  The OTR
+   protocol uses the prefix "?OTR" to denote that a message is an OTR
+   protocol message.  It uses base64 to encode all encrypted content.
+
+3.1.  Requesting an OTR Conversation
+
+   As the OTR protocol needs to work fully within the message content
+   channel, discovery of the OTR capability has to be performed inide
+   that channel.  This process needs to be invisible to clients that do
+   not support OTR.  To achieve this, a special "morse code" message is
+   appended to the user written message before the message is sent out
+   over the network.  This "morse code" message consists of spaces and
+   tab characters.  Both of these characters are displayed as whitespace
+   and therefor do not disturb the conversation with someone using an
+   instant message client that does not support OTR.  An OTR-supporting
+   client receiving this marker can initiate an OTR conversation
+   automatically based on its local policy.
+
+   When an OTR-capable client requires all messages to be protected by
+   OTR, it skips the discovery mechanism and sends an OTR Query Message.
+   Like all OTR messages, it uses the "?OTR" prefix for the receiving
+   OTR-capable client to process the message.  This initial message also
+   contains a human readable portion in plaintext or HTML that can be
+   used to inform non-OTR capable clients about their lack of OTR
+   support.  OTR capable clients cannot prevent non-OTR clients from
+   sending unencrypted messages.
+
+   Both the discovery and the initiation message contain an OTR version
+   number to indicate which OTR versions the client supports.  Currently
+   only version "3" has been defined.  Previous (non-standarized)
+   versions SHOULD NOT be supported.
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 4]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+3.2.  Establishing an OTR Conversation
+
+   When both parties agree to initiate an OTR conversation, an
+   Authenticated Key Exchange ("AKE") is performed.  AKE first ensures
+   privacy via a Diffie-Hellman key exchange.  This is followed by an
+   exchange of the participants "long term public key" that identifies
+   the parties.  Both parties need to authenticate each other's long
+   term public key out-of-band.  The "long term public key" is only used
+   for authentication.  It is never used for encryption.
+
+3.3.  Handling multiple sign-ons
+
+   Most IM networks allow users to be signed in multiple times.  That
+   allows users to run their IM software on multiple devices at once.
+   Messages send to a user arrive on all instances of that user, but
+   only one instance can decrypt the OTR session.
+
+   Clients include instance tags in all OTR messages to differentiate
+   the client instances for each user.
+
+3.4.  Fragmentation of data
+
+   A user trying to send a message that before encryption is near or at
+   the maximum message size of the message network will result in an
+   encrypted mesage that exceeds the network's maximum message size.
+   OTR allows an encrypted message to be fragmented into parts that are
+   send as individual messages over the message network.  Because OTR is
+   transport-agnostic, the maximum message size is not specified in this
+   protocol.
+
+3.5.  The Socialist Millionaires' Protocol (SMP)
+
+   Once the AKE has completed successfully, each client has the other's
+   public key and an encrypted channel has been formed.  At this point,
+   both parties can mutually authenticate each other to ensure no man in
+   the middle attack is taking place.  Some information must have been
+   shared out of band (such as in persion) to securely authenticate
+   successfully.  The Socialist Millionaires' Protocol as used by OTR
+   prov ides an alternative to manually checking the public key
+   fingerprint which is often inconvenient or impossible to have
+   communicated in the pa st e.g. the public keys of both parties did
+   not exist when the two parties last communicated.  SMP allows an
+   arbitrary string to act as a sha red secret while preserving perfect
+   forward secrecy.  This shared secret can be much more human friendly
+   and easier to communicate than a key fingerprint.
+
+   Clients also include the option for a user to send a textual question
+   along with the authentication query which is displayed when prompting
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 5]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+   the other party for input.  This provides several benefits in shared
+   secret selection as any private information known to both par ties
+   can be the subject of an authentication question.  This allows, for
+   example, two parties with prior interactions to start using OTR to c
+   ommunicate without exchanging formal key information in person;
+   instead authenticating by asking a sufficiently specific question
+   about shar ed history.
+
+3.6.  Exchanging Encrypted Messages
+
+   To follow.
+
+3.7.  Exchanging Encrypted Bulk Data
+
+   The OTR protocol itself is not well suited for bulk encryption of
+   data. [how true is this?]  Many message networks only allow messages
+   to be transported at human speeds and activate rate limiting when an
+   instant message client bursts out too many messages in a short time
+   frame.  Some message networks have special facilities for bulk data
+   transfer that should be used instead, often identified as a "Send
+   File" option.  Some message networks also support audio and video
+   streams separate from the message channel.
+
+   The OTR protocol allows negotiation of a symmetric key that can be
+   used to encrypt and decrypt bulk data.  Transport of the encrypted
+   bulk data can happen within the conversation stream, via the message
+   network's alternative transport mechanisms for bulk data, or
+   completely outside the message network such as email.
+
+4.  Protocol Description
+
+4.1.  Message Encoding
+
+   User data (eg the conversation) can be extended with any number of
+   TLV's.  This data is than encrypted, and encoded with BASE64
+
+4.1.1.  UTF-8 and html
+
+4.1.2.  BASE64
+
+4.1.3.  Combining encodings?
+
+4.2.  Authenticated Key Exchange
+
+   This section outlines the version of the SIGMA protocol used as the
+   AKE.  All exponentiations are done using the 1536-bit modules
+   (hex,big-endian) from [RFC3526] with g=2 as a generator of that
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 6]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+   group.  Alice and Bob's long-term authentication public keys are pubA
+   and pubB, respectively.
+
+   Alice and Bob do an unauthenticated Diffie-Hellman (D-H) key exchange
+   to set up an encrypted channel, and then do mutual authentication
+   inside that channel.
+
+   When Bob initiates the AKE with Alice, the process is as follows.
+
+   1.  Bob does the following:
+
+
+
+       1.  Picks a random value r (128 bits)
+
+       2.  Picks a random value x (at least 320 bits)
+
+       3.  Sends Alice AESr(g^x), HASH(g^x)
+
+
+
+   2.  Alice does the following:
+
+
+
+       1.  Picks a random value y (at least 320 bits)
+
+       2.  Sends Bob g^y
+
+
+
+   3.  Bob does the following:
+
+
+
+       1.  Verifies that Alice's g^y is a legal value (2 >= g^y >=
+           modulus-2)
+
+       2.  Computes s = (g^y)^x
+
+       3.  Computes two AES keys c, c' and four MAC keys m1, m1', m2,
+           m2' by hashing s in various ways
+
+       4.  Picks keyidB, a serial number for his D-H key g^x
+
+       5.  Computes MB = MACm1(g^x, g^y, pubB, keyidB)
+
+       6.  Computes XB = pubB, keyidB, sigB(MB)
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 7]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+       7.  Sends Alice r, AESc(XB), MACm2(AESc(XB))
+
+
+
+   4.  Alice does the following:
+
+
+
+       1.   Uses r to decrypt the value of gx sent earlier
+
+       2.   Verifies that HASH(g^x) matches the value sent earlier
+
+       3.   Verifies that Bob's g^x is a legal value (2 >= g^x >=
+            modulus-2)
+
+       4.   Computes s = (g^x)^y (note that this will be the same as the
+            value of s Bob calculated)
+
+       5.   Computes two AES keys c, c' and four MAC keys m1, m1', m2,
+            m2' by hashing s in various ways (the same as Bob)
+
+       6.   Uses m2 to verify MACm2(AESc(XB))
+
+       7.   Uses c to decrypt AESc(XB) to obtain XB = pubB, keyidB,
+            sigB(MB)
+
+       8.   Computes MB = MACm1(g^x, g^y, pubB, keyidB)
+
+       9.   Uses pubB to verify sigB(MB)
+
+       10.  Picks keyidA, a serial number for her D-H key gy
+
+       11.  Computes MA = MACm1'(gy, gx, pubA, keyidA)
+
+       12.  Computes XA = pubA, keyidA, sigA(MA)
+
+       13.  Sends Bob AESc'(XA), MACm2'(AESc'(XA))
+
+
+
+   5.  Bob does the following:
+
+
+
+       1.  Uses m2' to verify MACm2'(AESc'(XA))
+
+       2.  Uses c' to decrypt AESc'(XA) to obtain XA = pubA, keyidA,
+           sigA(MA)
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 8]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+       3.  Computes MA = MACm1'(g^y, g^x, pubA, keyidA)
+
+       4.  Uses pubA to verify sigA(MA)
+
+   If all of the verifications succeeded, Alice and Bob now know each
+   other's Diffie-Hellman public keys, and share the value s.  Alice is
+   assured that s is known by someone with access to the private key
+   corresponding to pubB, and similarly for Bob.
+
+4.3.  Message Flow
+
+   An OTR conversations
+
+
+                    ALICE                             BOB
+
+                                  [ plaintext ]
+                     Query Message  ----->
+                                    <-----  DH-Commit Message
+                     DH-Key Message ----->
+                                    <-----  Reveal Signature Message
+                  Signature Message ----->
+                            [ Unverified / Private ]
+
+    Data Message (TLV Type not 1)   ----->
+                                    <----- Data Message (TLV Type not 1)
+                                    [...]
+
+                 Data Message (TLV1) ---->
+                                  [ plaintext ]
+
+
+4.4.  Message Types
+
+4.4.1.  Query and Init Message
+
+4.4.2.  Error Message
+
+4.4.3.  DH commit Message
+
+4.4.4.  DH key Message
+
+4.4.5.  Reavel Signature Message
+
+
+
+
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                 [Page 9]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+4.4.6.  Signature Message
+
+4.4.7.  Data Message
+
+   A data message is formed by:
+
+              <User input> | 0x00 | <TLV> <TLV>  ...
+
+
+4.4.7.1.  TLV Record types
+
+   TLV types, use sections or dropdown?
+
+      TLV Type:
+
+         One octet specifying the TLV typer. The following
+         values are assigned:
+
+             Value    TLV Numer              Format
+             -----    -------------------   --------
+             0        Padding               <insert me>
+             1        Disconnected          <insert me>
+             2        SMP Message 1         MPI Format
+             3        SMP Message 2         MPI Format
+             4        SMP Message 3         MPI Format
+             5        SMP Message 4         MPI Format
+             6        SMP Abort Message     <insert me>
+             7        SMP Message 1Q        <insert me>
+             8        Extra Symmetric Key   <insert me>
+
+
+4.4.7.1.1.  MPI Format
+
+                         1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    !                           MPI Count                           !
+    +---------------------------------------------------------------+
+    !                                                               !
+    ~                             MPI(s)                            ~
+    !                                                               !
+    +---------------------------------------------------------------+
+
+      MPI
+
+
+
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                [Page 10]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+4.5.  Instance tags
+
+   . Instance tags are 32-bit values that are intended to be persistent.
+   If same client is logged into the same account from multiple
+   locations, the intention is that the client will have different
+   instance tags at each location.  As shown below, OTR messages
+   (fragmented and unfragmented) include the source and destination
+   instance tags.  If a client receives a message that lists a
+   destination instance tag different from its own, the client should
+   discard the message.
+
+   The smallest valid instance tag is 0x00000100.  It is appropriate to
+   set the destination instance tag to '0' when an actual destination
+   instance tag is not known at the time the message is prepared.  If a
+   client receives a message with the sender instance tag set to less
+   than 0x00000100, it should discard the message.  Similarly, if a
+   client receives a message with the recipient instance tag set to
+   greater than 0 but less than 0x00000100, it should discard the
+   message.
+
+   This avoids an issue on IM networks that always relay all messages to
+   all sessions of a client who is logged in multiple times.  In this
+   situation, OTR clients can attempt to establish an OTR session
+   indefinitely if there are interleaving messages from each of the
+   sessions.
+
+4.6.  Fragmentation
+
+4.7.  Socialist Millionaires' Protocol
+
+5.  Key format and storage
+
+   To follow.
+
+6.  Implementation Guidelines
+
+   To follow.  See RFC 6982
+
+7.  Security Considerations
+
+   To follow.
+
+8.  References
+
+
+
+
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                [Page 11]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+8.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997, <https://www.rfc-
+              editor.org/info/rfc2119>.
+
+   [RFC3526]  Kivinen, T. and M. Kojo, "More Modular Exponential (MODP)
+              Diffie-Hellman groups for Internet Key Exchange (IKE)",
+              RFC 3526, DOI 10.17487/RFC3526, May 2003,
+              <https://www.rfc-editor.org/info/rfc3526>.
+
+   [RFC4648]  Josefsson, S., "The Base16, Base32, and Base64 Data
+              Encodings", RFC 4648, DOI 10.17487/RFC4648, October 2006,
+              <https://www.rfc-editor.org/info/rfc4648>.
+
+8.2.  Informative References
+
+   [RFC4949]  Shirey, R., "Internet Security Glossary, Version 2",
+              FYI 36, RFC 4949, DOI 10.17487/RFC4949, August 2007,
+              <https://www.rfc-editor.org/info/rfc4949>.
+
+Authors' Addresses
+
+   Ian Goldberg
+   University of Waterloo
+   200 University Ave W
+   Waterloo, ONT  N2L 3G1
+   Canada
+
+   Email: iang@cs.uwaterloo.ca
+
+
+   Peter Saint-Andre (editor)
+   Cisco
+   1899 Wyknoop Street, Suite 600
+   Denver, CO  80202
+   USA
+
+   Phone: +1-303-308-3282
+   Email: psaintan@cisco.com
+
+
+   Paul Wouters (editor)
+   Red Hat
+
+   Email: pwouters@redhat.com
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                [Page 12]
+
+Internet-Draft                    OTRv3                   September 2013
+
+
+   Geordie Bilkey (editor)
+   PowerInform
+
+   Email: geordie@powerinform.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Goldberg, et al.          Expires March 5, 2014                [Page 13]
